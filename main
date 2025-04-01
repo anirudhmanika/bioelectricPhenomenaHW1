@@ -1,0 +1,119 @@
+%% Initialize parameters
+
+g_na = 120;
+g_k = 36;
+g_l = 0.3;
+
+
+E_leak = -50;
+E_na = 57; 
+E_k = -75;
+
+Cm = 1.0;
+
+Vm_init = -65; 
+tspan = [0 20];  
+
+% Initial conditions for ss gating variables 
+alpha_n = 0.01 * (Vm_init + 55) / (1 - exp(-0.1 * (Vm_init + 55)));
+beta_n = 0.125 * exp(-(Vm_init) / 80);
+alpha_m = 0.1 * (Vm_init + 40) / (1 - exp(-0.1 * (Vm_init + 40)));
+beta_m = 4 * exp(-(Vm_init) / 18);
+alpha_h = 0.07 * exp(-(Vm_init) / 20);
+beta_h = 1 / (1 + exp(-0.1 * (Vm_init + 30)));
+
+n_init = alpha_n / (alpha_n + beta_n);
+m_init = alpha_m / (alpha_m + beta_m);
+h_init = alpha_h / (alpha_h + beta_h);
+
+
+y0 = [Vm_init; n_init; m_init; h_init];
+
+options = odeset('RelTol',1e-4,'AbsTol',[1e-8 1e-8 1e-8 1e-8],'MaxStep',0.01);
+
+
+[t, y] = ode45(@hh_ode, tspan, y0, options);
+
+Vm = y(:, 1);  
+n = y(:, 2);  
+m = y(:, 3);   
+h = y(:, 4);   
+
+% ionic currents
+I_Na = g_na * m.^3 .* h .* (Vm - E_na);  
+I_K = g_k * n.^4 .* (Vm - E_k);          
+I_L = g_l * (Vm - E_l);                  
+
+%% Plots
+
+% Plot membrane potential Vm(t)
+figure;
+plot(t, Vm, 'LineWidth', 2);
+xlabel('Time (ms)');
+ylabel('Membrane Potential (mV)');
+title('Membrane Potential (Vm) Over Time');
+grid on;
+
+% Plot gating variables n(t), m(t), h(t)
+figure;
+plot(t, n, t, m, t, h, 'LineWidth', 2);
+legend('n(t)', 'm(t)', 'h(t)');
+xlabel('Time (ms)');
+ylabel('Gating Variables');
+title('Gating Variables Over Time');
+grid on;
+
+% Plot sodium and potassium currents I_Na(t), I_K(t)
+figure;
+plot(t, I_Na, t, I_K, 'LineWidth', 2);
+legend('I_{Na}(t)', 'I_{K}(t)');
+xlabel('Time (ms)');
+ylabel('Ionic Currents (\muA/cm^2)');
+title('Ionic Currents Over Time');
+grid on;
+
+%% Function 
+function dy = hh_ode(t, y)
+
+   
+    V = y(1);  
+    n = y(2); 
+    m = y(3);  
+    h = y(4);  
+    g_na = 120; 
+    g_k = 36;  
+    g_l = 0.3;  
+    E_na = 115; 
+    E_k = -12;  
+    E_l = 10.6;
+    Cm = 1.0;   
+
+    % Alpha and beta rate equations
+    alpha_n = 0.01 * (V + 55) / (1 - exp(-0.1 * (V + 55)));
+    beta_n = 0.125 * exp(-(V) / 80);
+    alpha_m = 0.1 * (V + 40) / (1 - exp(-0.1 * (V + 40)));
+    beta_m = 4 * exp(-(V) / 18);
+    alpha_h = 0.07 * exp(-(V) / 20);
+    beta_h = 1 / (exp((30-Vm)/10) + 1);
+
+    % Gating variable differential equations
+    dn = alpha_n * (1 - n) - beta_n * n;
+    dm = alpha_m * (1 - m) - beta_m * m;
+    dh = alpha_h * (1 - h) - beta_h * h;
+
+    % (Is) square pulse for depolarization
+    if t >= 1 && t <= 1.35  % Pulse duration is 0.35 ms
+        I_ext = 10;  %  µA
+    else
+        I_ext = 0;
+    end
+
+    I_Na = g_na * m^3 * h * (V - E_na);  
+    I_K = g_k * n^4 * (V - E_k);         
+    I_L = g_l * (V - E_l);               
+
+    
+    dV = (I_ext - I_Na - I_K - I_L) / Cm;
+
+    dy = [dV; dn; dm; dh];
+end
